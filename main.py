@@ -1,9 +1,9 @@
 import pygame
 import os
-# import random
+import random
 
 pygame.font.init()
-FONT = pygame.font.SysFont('Fira Code', 18)
+FONT = pygame.font.SysFont('Fira Code', 16)
 
 SCREEN_WIDTH = 1280
 SCREEN_HEIGHT = 500
@@ -26,20 +26,21 @@ class Dinosaur:
     ANIMATION_TIME = 4
     RUNNING_IMAGES = DINOSAUR_RUNNING_IMAGES
 
-    def __init__(self, x_axis, y_axis):
+    def __init__(self, x_axis, y_axis, ground_y_axis):
         self.x_axis = x_axis
         self.y_axis = y_axis
-        self.min_y_axis = y_axis
         self.speed = 0
         self.time = 0
         self.height = self.y_axis
         self.actual_image_count = 0
         self.actual_image = self.IDLE_IMAGE
+        self.ground_y_axis = ground_y_axis
 
     def jump(self):
-        self.speed = -14
-        self.time = 0
-        self.height += self.y_axis
+        if self.is_grounded():
+            self.speed = -13.5
+            self.time = 0
+            self.height += self.y_axis
 
     def move(self):
         # calculate displacement
@@ -68,23 +69,30 @@ class Dinosaur:
     def spawn(self, screen):
         self.run()
 
+        if self.is_grounded():
+            self.y_axis = 405
+        else:
+            self.actual_image = self.IDLE_IMAGE
+
         screen.blit(self.actual_image, (self.x_axis, self.y_axis))
 
     def get_image_mask(self):
         return pygame.mask.from_surface(self.actual_image)
 
+    def is_grounded(self):
+        return (self.y_axis + self.actual_image.get_height()) > self.ground_y_axis
+
 
 class Cactus:
-    SPEED = 10
-
-    def __init__(self, x_axis):
+    def __init__(self, x_axis, speed):
         self.x_axis = x_axis
         self.y_axis = 424
         self.IMAGE = CACTUS_IMAGE
         self.has_passed = False
+        self.speed = speed
 
     def move(self):
-        self.x_axis -= self.SPEED
+        self.x_axis -= self.speed
 
     def spawn(self, screen):
         screen.blit(self.IMAGE, (self.x_axis, self.y_axis))
@@ -97,25 +105,22 @@ class Cactus:
 
         has_collided = dinosaur_mask.overlap(cactus_mask, objects_distance)
 
-        if has_collided:
-            return True
-        else:
-            return False
+        return has_collided
 
 
 class Ground:
-    SPEED = 10
     WIDTH = GROUND_IMAGE.get_width()
     IMAGE = GROUND_IMAGE
 
-    def __init__(self, y_axis):
+    def __init__(self, y_axis, speed):
         self.y_axis = y_axis
         self.x_axis_0 = 0
         self.x_axis_1 = self.WIDTH
+        self.speed = speed
 
     def move(self):
-        self.x_axis_0 -= self.SPEED
-        self.x_axis_1 -= self.SPEED
+        self.x_axis_0 -= self.speed
+        self.x_axis_1 -= self.speed
 
         if self.x_axis_0 + self.WIDTH < 0:
             self.x_axis_0 = self.x_axis_1 + self.WIDTH
@@ -127,7 +132,7 @@ class Ground:
         screen.blit(self.IMAGE, (self.x_axis_1, self.y_axis))
 
 
-def render_screen(screen, ground, score, dinosaurs, cacti):
+def render_screen(screen, ground, score, dinosaurs, cacti, speed, obstacles):
     screen.blit(BACKGROUND_IMAGE, (0, 0))
 
     for dinosaur in dinosaurs:
@@ -136,7 +141,11 @@ def render_screen(screen, ground, score, dinosaurs, cacti):
     for cactus in cacti:
         cactus.spawn(screen)
 
-    score_text = FONT.render(f"Score: {score}", True, (0, 0, 0))
+    score_text = FONT.render(
+        f"Velocidade: {round(speed)} | Obstáculos: {obstacles} | Score: {round(score)}",
+        True,
+        (0, 0, 0)
+    )
     screen.blit(score_text, (SCREEN_WIDTH - 10 - score_text.get_width(), 10))
 
     ground.spawn(screen)
@@ -145,12 +154,16 @@ def render_screen(screen, ground, score, dinosaurs, cacti):
 
 
 def main():
-    screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-    ground = Ground(475)
+    speed = 10
     score = 0
-    dinosaurs = [Dinosaur(120, 405)]
-    cacti = [Cactus(SCREEN_WIDTH)]
+    obstacles = 0
+    screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+    ground = Ground(475, speed)
+    dinosaurs = [Dinosaur(120, 405, ground.y_axis)]
+    cacti = [Cactus(SCREEN_WIDTH, speed)]
     clock = pygame.time.Clock()
+    reference_values_to_spawn_obstacles = [1.5, 1.75, 2, 2.25, 2.5, 2.75, 3]
+    reference_values_to_set_new_x_axis = [0, 0.25, 0.05, 0.075, 0.1, 0.125, 0.15, 0.175]
 
     is_running = True
     while is_running:
@@ -167,36 +180,42 @@ def main():
                     for dinosaur in dinosaurs:
                         dinosaur.jump()
 
-        ground.move()
-
         for i, dinosaur in enumerate(dinosaurs):
             dinosaur.move()
 
-            if (dinosaur.y_axis + dinosaur.actual_image.get_height()) > ground.y_axis:
-                dinosaur.y_axis = 405
+        if len(dinosaurs):
+            ground.move()
+
+            if score > 100 and round(score) % 100 == 0:
+                speed += speed * 10 / 100
+
+            time = clock.get_time() / 1000
+            score += speed * time
 
         has_to_add_cactus = False
         cacti_to_remove = []
         for cactus in cacti:
+            has_to_add_cactus = cactus.x_axis < SCREEN_WIDTH / random.choice(reference_values_to_spawn_obstacles)
+
             for i, dinosaur in enumerate(dinosaurs):
                 if cactus.collide(dinosaur):
                     dinosaurs.pop(i)
                 if not cactus.has_passed and dinosaur.x_axis > cactus.x_axis:
                     cactus.has_passed = True
-                    has_to_add_cactus = True
+                    obstacles += 1
 
                 cactus.move()
                 if cactus.x_axis + cactus.IMAGE.get_width() < 0:
                     cacti_to_remove.append(cactus)
 
         if has_to_add_cactus:
-            score += 1
-            cacti.append(Cactus(SCREEN_WIDTH))
+            new_cactus_x_axis = SCREEN_WIDTH + (SCREEN_WIDTH * random.choice(reference_values_to_set_new_x_axis))
+            cacti.append(Cactus(new_cactus_x_axis, speed))
 
         for cactus in cacti_to_remove:
             cacti.remove(cactus)
 
-        render_screen(screen, ground, score, dinosaurs, cacti)
+        render_screen(screen, ground, score, dinosaurs, cacti, speed, obstacles)
 
 
 if __name__ == '__main__':
