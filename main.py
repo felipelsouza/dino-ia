@@ -12,7 +12,10 @@ FRAME_RATE = 30
 
 BACKGROUND_IMAGE = pygame.transform.scale2x(pygame.image.load(os.path.join('images', 'background.png')))
 GROUND_IMAGE = pygame.transform.scale2x(pygame.image.load(os.path.join('images', 'ground.png')))
-CACTUS_IMAGE = pygame.transform.scale2x(pygame.image.load(os.path.join('images', 'small_cactus_2.png')))
+CACTUS_IMAGES = [
+    pygame.transform.scale2x(pygame.image.load(os.path.join('images', 'small_cactus_1.png'))),
+    pygame.transform.scale2x(pygame.image.load(os.path.join('images', 'small_cactus_2.png')))
+]
 DINOSAUR_IDLE_IMAGE = pygame.transform.scale2x(pygame.image.load(os.path.join('images', 'dino.png')))
 DINOSAUR_RUNNING_IMAGES = [
     pygame.transform.scale2x(pygame.image.load(os.path.join('images', 'dino_running_1.png'))),
@@ -87,7 +90,7 @@ class Cactus:
     def __init__(self, x_axis, speed):
         self.x_axis = x_axis
         self.y_axis = 424
-        self.IMAGE = CACTUS_IMAGE
+        self.IMAGE = CACTUS_IMAGES[random.choice([0, 1])]
         self.has_passed = False
         self.speed = speed
 
@@ -179,6 +182,13 @@ def main():
                 if event.key == pygame.K_SPACE or event.key == pygame.K_UP:
                     for dinosaur in dinosaurs:
                         dinosaur.jump()
+
+                if event.key == pygame.K_r and len(dinosaurs) < 1:
+                    speed = 10
+                    score = 0
+                    obstacles = 0
+                    dinosaurs.append(Dinosaur(120, 405, ground.y_axis))
+                    cacti = [Cactus(SCREEN_WIDTH, speed)]
 
         for i, dinosaur in enumerate(dinosaurs):
             dinosaur.move()
