@@ -145,7 +145,7 @@ def render_screen(screen, ground, score, dinosaurs, cacti, speed, obstacles):
         cactus.spawn(screen)
 
     score_text = FONT.render(
-        f"Velocidade: {round(speed)} | Obstáculos: {obstacles} | Score: {round(score)}",
+        f'Velocidade: {round(speed)} | Obstáculos: {obstacles} | Score: {round(score)}',
         True,
         (0, 0, 0)
     )
