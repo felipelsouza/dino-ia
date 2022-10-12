@@ -1,6 +1,10 @@
 import pygame
 import os
 import random
+import neat
+
+ai_playing = True
+generation = 0
 
 pygame.font.init()
 FONT = pygame.font.SysFont('Fira Code', 16)
@@ -151,22 +155,43 @@ def render_screen(screen, ground, score, dinosaurs, cacti, speed, obstacles):
     )
     screen.blit(score_text, (SCREEN_WIDTH - 10 - score_text.get_width(), 10))
 
+    if ai_playing:
+        score_text = FONT.render(f'GERAÇÃO: {generation}', True, (0, 0, 0))
+        screen.blit(score_text, (10, 10))
+
     ground.spawn(screen)
 
     pygame.display.update()
 
 
-def main():
+def main(genomes, config):
+    global generation
+    generation += 1
+
     speed = 10
     score = 0
     obstacles = 0
-    screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+
     ground = Ground(475, speed)
-    dinosaurs = [Dinosaur(120, 405, ground.y_axis)]
     cacti = [Cactus(SCREEN_WIDTH, speed)]
-    clock = pygame.time.Clock()
+    if ai_playing:
+        networks = []
+        genomes_list = []
+        dinosaurs = []
+
+        for _, genome in genomes:
+            net = neat.nn.FeedForwardNetwork.create(genome, config)
+            networks.append(net)
+            genome.fitness = 0
+            genomes_list.append(genome)
+            dinosaurs.append(Dinosaur(120, 405, ground.y_axis))
+    else:
+        dinosaurs = [Dinosaur(120, 405, ground.y_axis)]
+
     reference_values_to_spawn_obstacles = [1.5, 1.75, 2, 2.25, 2.5, 2.75, 3]
     reference_values_to_set_new_x_axis = [0, 0.25, 0.05, 0.075, 0.1, 0.125, 0.15, 0.175]
+    screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+    clock = pygame.time.Clock()
 
     is_running = True
     while is_running:
@@ -178,20 +203,44 @@ def main():
                 pygame.quit()
                 quit()
 
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_SPACE or event.key == pygame.K_UP:
-                    for dinosaur in dinosaurs:
-                        dinosaur.jump()
+            if not ai_playing:
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_SPACE or event.key == pygame.K_UP:
+                        for dinosaur in dinosaurs:
+                            dinosaur.jump()
 
-                if event.key == pygame.K_r and len(dinosaurs) < 1:
-                    speed = 10
-                    score = 0
-                    obstacles = 0
-                    dinosaurs.append(Dinosaur(120, 405, ground.y_axis))
-                    cacti = [Cactus(SCREEN_WIDTH, speed)]
+                    if event.key == pygame.K_r and len(dinosaurs) < 1:
+                        speed = 10
+                        score = 0
+                        obstacles = 0
+                        dinosaurs.append(Dinosaur(120, 405, ground.y_axis))
+                        cacti = [Cactus(SCREEN_WIDTH, speed)]
+
+        if ai_playing:
+            cactus_index = 0
+            if len(dinosaurs) > 0:
+                if len(cacti) > 1 and dinosaurs[0].x_axis > (cacti[0].x_axis + cacti[0].IMAGE.get_width()):
+                    cactus_index = 1
+            else:
+                is_running = False
+                break
 
         for i, dinosaur in enumerate(dinosaurs):
             dinosaur.move()
+
+            if ai_playing:
+                genomes_list[i].fitness += 0.1
+
+                # output => between -1 and 1
+                output = networks[i].activate((
+                    dinosaur.y_axis,
+                    abs(dinosaur.y_axis - cacti[cactus_index].IMAGE.get_height()),
+                    abs(dinosaur.y_axis - cacti[cactus_index].y_axis),
+                    abs(dinosaur.x_axis - cacti[cactus_index].x_axis)
+                ))
+
+                if output[0] > 0.5:
+                    dinosaur.jump()
 
         if len(dinosaurs):
             ground.move()
@@ -210,17 +259,28 @@ def main():
             for i, dinosaur in enumerate(dinosaurs):
                 if cactus.collide(dinosaur):
                     dinosaurs.pop(i)
+
+                    if ai_playing:
+                        genomes_list[i].fitness -= 1
+                        genomes_list.pop(i)
+                        networks.pop(i)
                 if not cactus.has_passed and dinosaur.x_axis > cactus.x_axis:
                     cactus.has_passed = True
                     obstacles += 1
 
+            if len(dinosaurs) > 0:
                 cactus.move()
-                if cactus.x_axis + cactus.IMAGE.get_width() < 0:
-                    cacti_to_remove.append(cactus)
+
+            if cactus.x_axis + cactus.IMAGE.get_width() < 0:
+                cacti_to_remove.append(cactus)
 
         if has_to_add_cactus:
             new_cactus_x_axis = SCREEN_WIDTH + (SCREEN_WIDTH * random.choice(reference_values_to_set_new_x_axis))
             cacti.append(Cactus(new_cactus_x_axis, speed))
+
+            if ai_playing:
+                for genome in genomes_list:
+                    genome.fitness += 5
 
         for cactus in cacti_to_remove:
             cacti.remove(cactus)
@@ -228,5 +288,24 @@ def main():
         render_screen(screen, ground, score, dinosaurs, cacti, speed, obstacles)
 
 
+def run(config_path):
+    ai_config = neat.config.Config(
+        neat.DefaultGenome,
+        neat.DefaultReproduction,
+        neat.DefaultSpeciesSet,
+        neat.DefaultStagnation,
+        config_path
+    )
+
+    population = neat.Population(ai_config)
+    population.add_reporter(neat.StdOutReporter(True))
+    population.add_reporter(neat.StatisticsReporter())
+
+    if ai_playing:
+        population.run(main, 50)
+    else:
+        main(None, None)
+
+
 if __name__ == '__main__':
-    main()
+    run('config.txt')
