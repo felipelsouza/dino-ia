@@ -5,6 +5,7 @@ import neat
 
 ai_playing = True
 generation = 0
+max_score = 0
 
 pygame.font.init()
 FONT = pygame.font.SysFont('Fira Code', 16)
@@ -149,14 +150,14 @@ def render_screen(screen, ground, score, dinosaurs, cacti, speed, obstacles):
         cactus.spawn(screen)
 
     score_text = FONT.render(
-        f'Velocidade: {round(speed)} | Obstáculos: {obstacles} | Score: {round(score)}',
+        f'Velocidade: {round(speed)} | Obstáculos: {obstacles} | Score: {round(score)} | Score máximo: {round(max_score)}',
         True,
         (0, 0, 0)
     )
     screen.blit(score_text, (SCREEN_WIDTH - 10 - score_text.get_width(), 10))
 
     if ai_playing:
-        score_text = FONT.render(f'GERAÇÃO: {generation}', True, (0, 0, 0))
+        score_text = FONT.render(f'GERAÇÃO: {generation} | Dinossauros: {len(dinosaurs)}', True, (0, 0, 0))
         screen.blit(score_text, (10, 10))
 
     ground.spawn(screen)
@@ -166,6 +167,7 @@ def render_screen(screen, ground, score, dinosaurs, cacti, speed, obstacles):
 
 def main(genomes, config):
     global generation
+    global max_score
     generation += 1
 
     speed = 10
@@ -188,7 +190,7 @@ def main(genomes, config):
     else:
         dinosaurs = [Dinosaur(120, 405, ground.y_axis)]
 
-    reference_values_to_spawn_obstacles = [1.5, 1.75, 2, 2.25, 2.5, 2.75, 3]
+    reference_values_to_spawn_obstacles = [2, 2.25, 2.5, 2.75, 3]
     reference_values_to_set_new_x_axis = [0, 0.25, 0.05, 0.075, 0.1, 0.125, 0.15, 0.175]
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     clock = pygame.time.Clock()
@@ -236,7 +238,9 @@ def main(genomes, config):
                     dinosaur.y_axis,
                     abs(dinosaur.y_axis - cacti[cactus_index].IMAGE.get_height()),
                     abs(dinosaur.y_axis - cacti[cactus_index].y_axis),
-                    abs(dinosaur.x_axis - cacti[cactus_index].x_axis)
+                    abs(dinosaur.x_axis - cacti[cactus_index].x_axis),
+                    # abs(dinosaur.x_axis - cacti[-1].x_axis),
+                    speed
                 ))
 
                 if output[0] > 0.5:
@@ -258,6 +262,9 @@ def main(genomes, config):
 
             for i, dinosaur in enumerate(dinosaurs):
                 if cactus.collide(dinosaur):
+                    if score > max_score:
+                        max_score = score
+
                     dinosaurs.pop(i)
 
                     if ai_playing:
@@ -275,7 +282,7 @@ def main(genomes, config):
                 cacti_to_remove.append(cactus)
 
         if has_to_add_cactus:
-            new_cactus_x_axis = SCREEN_WIDTH + (SCREEN_WIDTH * random.choice(reference_values_to_set_new_x_axis))
+            new_cactus_x_axis = SCREEN_WIDTH + SCREEN_WIDTH * random.choice(reference_values_to_set_new_x_axis)
             cacti.append(Cactus(new_cactus_x_axis, speed))
 
             if ai_playing:
